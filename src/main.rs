@@ -52,7 +52,10 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 async fn handle_socket(socket: WebSocket) {
     let (mut sender, mut _receiver) = socket.split();
 
+    // Firing every 25ms will give us 40 updates per second, which is a reasonable rate for a mock data feed
     let mut ticker = time::interval(Duration::from_millis(25));
+
+    // The risk ticker fires every 5 seconds, simulating a critical alert that needs to be sent immediately
     let mut risk_ticker = time::interval(Duration::from_secs(5));
 
     println!("Client connected! Starting data firehose...");
