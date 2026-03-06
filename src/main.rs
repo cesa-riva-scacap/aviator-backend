@@ -52,6 +52,16 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 async fn handle_socket(socket: WebSocket) {
     let (mut sender, mut _receiver) = socket.split();
 
+    // 1. Pre-generate 1000 realistic 3-letter symbols (AAA, AAB, AAC...)
+    // We do this OUTSIDE the loop so it only happens once!
+    let mut symbols = Vec::with_capacity(1000);
+    for i in 0..1000 {
+        let char1 = (b'A' + (i / 676) as u8) as char;
+        let char2 = (b'A' + ((i % 676) / 26) as u8) as char;
+        let char3 = (b'A' + (i % 26) as u8) as char;
+        symbols.push(format!("{}{}{}", char1, char2, char3));
+    }
+
     // Firing every 25ms will give us 40 updates per second, which is a reasonable rate for a mock data feed
     let mut ticker = time::interval(Duration::from_millis(25));
 
@@ -70,9 +80,9 @@ async fn handle_socket(socket: WebSocket) {
                     let mut rng = rand::rng(); 
                     let mut temp_batch = Vec::with_capacity(1000);
                     
-                    for _ in 0..1000 {
+                    for i in 0..1000 {
                         temp_batch.push(Tick {
-                            symbol: "AAPL".to_string(),
+                            symbol: symbols[i].clone(),
                             price: 150.0 + rng.random_range(-2.0..2.0),
                             volume: rng.random_range(100..1000),
                         });
@@ -92,17 +102,29 @@ async fn handle_socket(socket: WebSocket) {
             
             // PRIORITY RISK ALERT
             _ = risk_ticker.tick() => {
-                let alert = WsMessage::Risk(RiskAlert {
-                    level: "CRITICAL".to_string(),
-                    message: "Exposure limit breached on AAPL!".to_string(),
-                });
+                // 1. Create a quick scope to get the random symbol and drop `rng`
+                let alert = {
+                    let mut rng = rand::rng();
+                    // Pick a random number between 0 and 999
+                    let random_index = rng.random_range(0..1000);
+                    let random_symbol = &symbols[random_index];
+                    
+                    WsMessage::Risk(RiskAlert {
+                        level: "CRITICAL".to_string(),
+                        // Inject the random symbol into the message
+                        message: format!("Exposure limit breached on {}!", random_symbol),
+                    })
+                }; // `rng` is destroyed right here!
                 
                 let json = serde_json::to_string(&alert).unwrap();
                 
                 if sender.send(Message::Text(json.into())).await.is_err() {
                     break;
                 }
-                println!("Fired Risk Alert!");
+                // Also print the specific symbol to the backend terminal
+                if let WsMessage::Risk(risk_alert) = &alert {
+                    println!("Fired Risk Alert: {}", risk_alert.message);
+                }
             }
         }
     }
