@@ -13,9 +13,13 @@ use tokio::time;
 // This represents a standard price update
 #[derive(Serialize, Clone)]
 struct Tick {
-    symbol: String,
-    price: f64,
-    volume: i32,
+    isin: String,
+    name: String,
+    xetra_mid: f64,
+    xetra_spr: f64,
+    lsx_spr: f64,
+    gettex_spr: f64,
+    trade_gate_spr: f64,
 }
 
 // This represents our High-Priority Risk Alert
@@ -52,39 +56,42 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 async fn handle_socket(socket: WebSocket) {
     let (mut sender, mut _receiver) = socket.split();
 
-    // 1. Pre-generate 1000 realistic 3-letter symbols (AAA, AAB, AAC...)
-    // We do this OUTSIDE the loop so it only happens once!
     let mut symbols = Vec::with_capacity(1000);
+    
     for i in 0..1000 {
-        let char1 = (b'A' + (i / 676) as u8) as char;
-        let char2 = (b'A' + ((i % 676) / 26) as u8) as char;
-        let char3 = (b'A' + (i % 26) as u8) as char;
-        symbols.push(format!("{}{}{}", char1, char2, char3));
+        symbols.push(format!("GB00BLD4Z{:03}", i));
     }
 
-    // Firing every 25ms will give us 40 updates per second, which is a reasonable rate for a mock data feed
+    /* Firing every 25ms will give us 40 updates per second, 
+     * which is a reasonable rate for a mock data feed 
+     * */
     let mut ticker = time::interval(Duration::from_millis(25));
 
-    // The risk ticker fires every 5 seconds, simulating a critical alert that needs to be sent immediately
+    /* The risk ticker fires every 5 seconds, simulating a 
+     * critical alert that needs to be sent immediately 
+     * */
     let mut risk_ticker = time::interval(Duration::from_secs(5));
 
     println!("Client connected! Starting data firehose...");
 
     loop {
         tokio::select! {
-            // STANDARD DATA HOSE
             _ = ticker.tick() => {
-                
                 let batch = {
-                    // We create rng inside here
                     let mut rng = rand::rng(); 
                     let mut temp_batch = Vec::with_capacity(1000);
                     
                     for i in 0..1000 {
+                        let base_price = 100.0 + rng.random_range(0.0..50.0);
+
                         temp_batch.push(Tick {
-                            symbol: symbols[i].clone(),
-                            price: 150.0 + rng.random_range(-2.0..2.0),
-                            volume: rng.random_range(100..1000),
+                            isin: symbols[i].clone(),
+                            name: "CoinShares ETP".to_string(),
+                            xetra_mid: base_price + rng.random_range(-0.05..0.05),
+                            xetra_spr: rng.random_range(0.05..0.15),
+                            lsx_spr: rng.random_range(0.06..0.16),
+                            gettex_spr: rng.random_range(0.07..0.17),
+                            trade_gate_spr: rng.random_range(0.08..0.18),
                         });
                     }
                     // Return the data out of the block
