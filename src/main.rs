@@ -20,6 +20,19 @@ struct Tick {
     lsx_spr: f64,
     gettex_spr: f64,
     trade_gate_spr: f64,
+    bid_size: f64,
+    ask_size: f64,
+    vol_xetra: f64,
+    vol_lsx: f64,
+    vol_gettex: f64,
+    vwap: f64,
+    day_high: f64,
+    day_low: f64,
+    ytd_perf: f64,
+    moving_avg: f64,
+    rsi: f64,
+    macd: f64,
+    bollinger: f64,
 }
 
 // This represents our High-Priority Risk Alert
@@ -54,11 +67,12 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 async fn handle_socket(socket: WebSocket) {
+    const BATCH_SIZE: usize = 3000;
     let (mut sender, mut _receiver) = socket.split();
 
-    let mut symbols = Vec::with_capacity(1000);
+    let mut symbols = Vec::with_capacity(BATCH_SIZE);
     
-    for i in 0..1000 {
+    for i in 0..BATCH_SIZE {
         symbols.push(format!("GB00BLD4Z{:03}", i));
     }
 
@@ -79,9 +93,9 @@ async fn handle_socket(socket: WebSocket) {
             _ = ticker.tick() => {
                 let batch = {
                     let mut rng = rand::rng(); 
-                    let mut temp_batch = Vec::with_capacity(1000);
+                    let mut temp_batch = Vec::with_capacity(BATCH_SIZE);
                     
-                    for i in 0..1000 {
+                    for i in 0..BATCH_SIZE {
                         let base_price = 100.0 + rng.random_range(0.0..50.0);
 
                         temp_batch.push(Tick {
@@ -92,6 +106,19 @@ async fn handle_socket(socket: WebSocket) {
                             lsx_spr: rng.random_range(0.06..0.16),
                             gettex_spr: rng.random_range(0.07..0.17),
                             trade_gate_spr: rng.random_range(0.08..0.18),
+                            bid_size: rng.random_range(100.0..5000.0),
+                            ask_size: rng.random_range(100.0..5000.0),
+                            vol_xetra: rng.random_range(1000.0..50000.0),
+                            vol_lsx: rng.random_range(500.0..20000.0),
+                            vol_gettex: rng.random_range(100.0..10000.0),
+                            vwap: base_price + rng.random_range(-1.0..1.0),
+                            day_high: base_price + rng.random_range(1.0..5.0),
+                            day_low: base_price - rng.random_range(1.0..5.0),
+                            ytd_perf: rng.random_range(-15.0..25.0),
+                            moving_avg: base_price + rng.random_range(-2.0..2.0),
+                            rsi: rng.random_range(20.0..80.0),
+                            macd: rng.random_range(-0.5..0.5),
+                            bollinger: rng.random_range(-1.0..1.0),
                         });
                     }
                     // Return the data out of the block
